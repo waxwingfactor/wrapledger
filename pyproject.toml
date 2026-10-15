@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wrapledger"
+version = "1.0.0"
+description = "Offline dispatch and balanced return closeout for mobile diaper wrapping"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{name = "WrapLedger contributors"}]
+classifiers = ["Programming Language :: Python :: 3", "Operating System :: OS Independent"]
+
+[project.scripts]
+wrapledger = "wrapledger.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/waxwingfactor/wrapledger"
+Issues = "https://github.com/waxwingfactor/wrapledger/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
