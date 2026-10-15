@@ -18,6 +18,7 @@ import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from unittest.mock import patch
 
 from wrapledger import core
@@ -500,10 +501,34 @@ class WrapLedgerAcceptance(unittest.TestCase):
         core.export(db=moved, event="autumn-wrap", out=out)
         self.assert_export_hashes(out)
 
+    def test_backup_releases_all_sqlite_connections_before_returning(self):
+        self.ready_closed()
+        opened = []
+        real_connect = sqlite3.connect
+
+        def observe_connection(*arguments, **keywords):
+            connection = real_connect(*arguments, **keywords)
+            opened.append(connection)
+            return connection
+
+        try:
+            # Keep real connections alive so garbage collection cannot hide a
+            # leaked backup handle on POSIX before Windows CI exercises it.
+            with patch.object(sqlite3, "connect", side_effect=observe_connection):
+                core.backup(db=self.db, out=self.root / "closed-handles.sqlite3")
+            self.assertTrue(opened)
+            for index, connection in enumerate(opened):
+                with self.subTest(connection=index):
+                    with self.assertRaises(sqlite3.ProgrammingError):
+                        connection.execute("SELECT 1")
+        finally:
+            for connection in opened:
+                connection.close()
+
     def corrupt_stored_text(self, needle):
         # Discover storage rather than assume core table/column names. The edit
         # preserves JSON syntax/SQL structure while changing a recorded fact.
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             tables = [row[0] for row in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
             )]
@@ -551,7 +576,7 @@ class WrapLedgerAcceptance(unittest.TestCase):
             with self.subTest(pragma=pragma):
                 other = self.root / (pragma + ".sqlite3")
                 core.backup(db=self.db, out=other)
-                with sqlite3.connect(other) as connection:
+                with closing(sqlite3.connect(other)) as connection, connection:
                     current = connection.execute("PRAGMA " + pragma).fetchone()[0]
                     connection.execute("PRAGMA " + pragma + "=" + str(current + 1))
                 with self.assertRaises(core.LedgerError):
@@ -562,7 +587,7 @@ class WrapLedgerAcceptance(unittest.TestCase):
         with self.assertRaises(core.LedgerError):
             core.verify(db=absent)
         unrelated = self.root / "unrelated.sqlite3"
-        with sqlite3.connect(unrelated) as connection:
+        with closing(sqlite3.connect(unrelated)) as connection, connection:
             connection.execute("CREATE TABLE unrelated (value TEXT)")
             connection.execute("INSERT INTO unrelated VALUES ('preserve')")
         before = unrelated.read_bytes()

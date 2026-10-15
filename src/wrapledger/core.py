@@ -406,8 +406,11 @@ def backup(db, out):
         reserved = True
         # A read transaction is established by _db; backup uses its snapshot.
         with _db(db) as source:
-            with sqlite3.connect(target) as destination:
+            destination = sqlite3.connect(target)
+            try:
                 source.backup(destination)
+            finally:
+                destination.close()
         result = verify(target)
         return {'out': str(target), **result}
     except (OSError, sqlite3.Error, LedgerError) as exc:

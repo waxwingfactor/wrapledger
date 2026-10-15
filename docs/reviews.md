@@ -19,6 +19,8 @@ A third agent reviewed transaction boundaries, report output, validation, receip
 - ASCII output encoding could cause a traceback for ordinary Unicode labels. CLI JSON uses ASCII escapes while preserving Unicode values on parsing.
 - A closed stdout pipe could trigger a second flush at interpreter shutdown. The handler now neutralizes the failed descriptor and returns exit 2. A command may already have committed before output fails; operators must inspect state before retrying.
 
+Cross-platform CI then caught a Windows backup handle leak: a SQLite connection context commits a transaction but does not close the file. Backup now explicitly closes its destination in a finally block; test-only SQLite connections are also closed explicitly so Windows can relocate and remove databases.
+
 Review also identified that interrupted file exports/backups can be partial. [Recovery instructions](operations.md) state this explicitly; database mutations remain transactional. No malicious-editor protection, authenticated operator identities, inventory integration, or physical-count truth guarantee is claimed.
 
 Final repair re-review and public artifact verification are recorded in [release verification](verification.md).
